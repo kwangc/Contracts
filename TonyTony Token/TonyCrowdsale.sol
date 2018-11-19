@@ -174,15 +174,7 @@ contract Crowdsale is Ownable {
     uint256 amount
   );
 
-  /**
-   * @param rate Number of token units a buyer gets per wei
-   * @dev The rate is the conversion between wei and the smallest and indivisible
-   * token unit. So, if you are using a rate of 1 with a ERC20Detailed token
-   * with 3 decimals called TOK, 1 wei will give you 1 unit, or 0.001 TOK.
-   * @param wallet Address where collected funds will be forwarded to
-   * @param token Address of the token being sold
-   */
-  constructor(uint256 rate, address wallet, IERC20 token) public {
+  constructor(uint256 rate, address wallet, IERC20 token) internal {
     require(rate > 0);
     require(wallet != address(0));
     require(token != address(0));
@@ -216,7 +208,9 @@ contract Crowdsale is Ownable {
 
     uint256 weiAmount = msg.value;
     _preValidatePurchase(beneficiary, weiAmount);
+
     uint256 tokens = _getTokenAmount(weiAmount);
+
     _weiRaised = _weiRaised.add(weiAmount);
 
     _processPurchase(beneficiary, tokens);
@@ -238,6 +232,7 @@ contract Crowdsale is Ownable {
     uint256 weiAmount
   )
     internal
+    view
   {
     require(beneficiary != address(0));
     require(weiAmount != 0);
@@ -248,6 +243,7 @@ contract Crowdsale is Ownable {
     uint256 weiAmount
   )
     internal
+    view
   {
   }
 
@@ -275,7 +271,6 @@ contract Crowdsale is Ownable {
   )
     internal
   {
-    // optional override
   }
 
   function _getTokenAmount(uint256 weiAmount)
@@ -284,9 +279,6 @@ contract Crowdsale is Ownable {
     return weiAmount.mul(_rate);
   }
 
-  /**
-   * @dev Determines how ETH is stored/forwarded on purchases.
-   */
   function _forwardFunds() internal {
     _wallet.transfer(msg.value);
   }
