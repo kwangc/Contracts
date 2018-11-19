@@ -280,10 +280,6 @@ contract Crowdsale is Ownable {
   function _forwardFunds() internal {
     _wallet.transfer(msg.value);
   }
-}
-
-contract CanReclaimToken is Ownable {
-  using SafeERC20 for IERC20;
 
   function reclaimToken(IERC20 _token) external onlyOwner {
     uint256 balance = _token.balanceOf(this);
