@@ -5,14 +5,13 @@ library SafeMath {
     if (a == 0) {
       return 0;
     }
-
     uint256 c = a * b;
     require(c / a == b);
     return c;
   }
 
   function div(uint256 a, uint256 b) internal pure returns (uint256) {
-    require(b > 0); // Solidity only automatically asserts when dividing by 0
+    require(b > 0);
     uint256 c = a / b;
     return c;
   }
@@ -65,6 +64,8 @@ interface IERC20 {
 }
 
 library SafeERC20 {
+  using SafeMath for uint256;
+
   function safeTransfer(
     IERC20 token,
     address to,
@@ -93,7 +94,30 @@ library SafeERC20 {
   )
     internal
   {
+    require((value == 0) || (token.allowance(msg.sender, spender) == 0));
     require(token.approve(spender, value));
+  }
+
+  function safeIncreaseAllowance(
+    IERC20 token,
+    address spender,
+    uint256 value
+  )
+    internal
+  {
+    uint256 newAllowance = token.allowance(address(this), spender).add(value);
+    require(token.approve(spender, newAllowance));
+  }
+
+  function safeDecreaseAllowance(
+    IERC20 token,
+    address spender,
+    uint256 value
+  )
+    internal
+  {
+    uint256 newAllowance = token.allowance(address(this), spender).sub(value);
+    require(token.approve(spender, newAllowance));
   }
 }
 
@@ -105,8 +129,9 @@ contract Ownable {
     address indexed newOwner
   );
 
-  constructor() public {
+  constructor() internal {
     _owner = msg.sender;
+    emit OwnershipTransferred(address(0), _owner);
   }
 
   function owner() public view returns(address) {
@@ -137,25 +162,11 @@ contract Crowdsale is Ownable {
   using SafeMath for uint256;
   using SafeERC20 for IERC20;
 
-  // The token being sold
   IERC20 private _token;
-  // Address where funds are collected
   address private _wallet;
-  // How many token units a buyer gets per wei.
-  // The rate is the conversion between wei and the smallest and indivisible token unit.
-  // So, if you are using a rate of 1 with a ERC20Detailed token with 3 decimals called TOK
-  // 1 wei will give you 1 unit, or 0.001 TOK.
   uint256 private _rate;
-  // Amount of wei raised
   uint256 private _weiRaised;
 
-  /**
-   * Event for token purchase logging
-   * @param purchaser who paid for the tokens
-   * @param beneficiary who got the tokens
-   * @param value weis paid for purchase
-   * @param amount amount of tokens purchased
-   */
   event TokensPurchased(
     address indexed purchaser,
     address indexed beneficiary,
@@ -284,10 +295,6 @@ contract Crowdsale is Ownable {
 contract CanReclaimToken is Ownable {
   using SafeERC20 for IERC20;
 
-  /**
-   * @dev Reclaim all ERC20 compatible tokens
-   * @param _token ERC20 The address of the token contract
-   */
   function reclaimToken(IERC20 _token) external onlyOwner {
     uint256 balance = _token.balanceOf(this);
     _token.safeTransfer(owner(), balance);
