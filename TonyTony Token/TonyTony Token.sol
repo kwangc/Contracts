@@ -5,14 +5,13 @@ library SafeMath {
     if (a == 0) {
       return 0;
     }
-
     uint256 c = a * b;
     require(c / a == b);
     return c;
   }
 
   function div(uint256 a, uint256 b) internal pure returns (uint256) {
-    require(b > 0); // Solidity only automatically asserts when dividing by 0
+    require(b > 0);
     uint256 c = a / b;
     return c;
   }
@@ -42,11 +41,15 @@ library Roles {
 
   function add(Role storage role, address account) internal {
     require(account != address(0));
+    require(!has(role, account));
+
     role.bearer[account] = true;
   }
 
   function remove(Role storage role, address account) internal {
     require(account != address(0));
+    require(has(role, account));
+
     role.bearer[account] = false;
   }
 
@@ -68,8 +71,9 @@ contract Ownable {
     address indexed newOwner
   );
 
-  constructor() public {
+  constructor() internal {
     _owner = msg.sender;
+    emit OwnershipTransferred(address(0), _owner);
   }
 
   function owner() public view returns(address) {
@@ -104,7 +108,7 @@ contract PauserRole {
 
   Roles.Role private pausers;
 
-  constructor() public {
+  constructor() internal {
     _addPauser(msg.sender);
   }
 
@@ -137,10 +141,14 @@ contract PauserRole {
 }
 
 contract Pausable is PauserRole {
-  event Paused();
-  event Unpaused();
+  event Paused(address account);
+  event Unpaused(address account);
 
-  bool private _paused = false;
+  bool private _paused;
+
+  constructor() internal {
+    _paused = false;
+  }
 
   function paused() public view returns(bool) {
     return _paused;
@@ -158,12 +166,12 @@ contract Pausable is PauserRole {
 
   function pause() public onlyPauser whenNotPaused {
     _paused = true;
-    emit Paused();
+    emit Paused(msg.sender);
   }
 
   function unpause() public onlyPauser whenPaused {
     _paused = false;
-    emit Unpaused();
+    emit Unpaused(msg.sender);
   }
 }
 
@@ -230,14 +238,7 @@ contract ERC20 is IERC20 {
   }
 
   function transfer(address to, uint256 value) public returns (bool) {
-    require(value <= _balances[msg.sender]);
-    require(to != address(0));
-    require(!frozenAccount[msg.sender]);
-    require(!frozenAccount[to]);
-
-    _balances[msg.sender] = _balances[msg.sender].sub(value);
-    _balances[to] = _balances[to].add(value);
-    emit Transfer(msg.sender, to, value);
+    _transfer(msg.sender, to, value);
     return true;
   }
 
@@ -257,14 +258,8 @@ contract ERC20 is IERC20 {
     public
     returns (bool)
   {
-    require(value <= _balances[from]);
-    require(value <= _allowed[from][msg.sender]);
-    require(to != address(0));
-
-    _balances[from] = _balances[from].sub(value);
-    _balances[to] = _balances[to].add(value);
     _allowed[from][msg.sender] = _allowed[from][msg.sender].sub(value);
-    emit Transfer(from, to, value);
+    _transfer(from, to, value);
     return true;
   }
 
@@ -298,28 +293,34 @@ contract ERC20 is IERC20 {
     return true;
   }
 
-  function _mint(address account, uint256 amount) internal {
-    require(account != 0);
-    _totalSupply = _totalSupply.add(amount);
-    _balances[account] = _balances[account].add(amount);
-    emit Transfer(address(0), account, amount);
+  function _transfer(address from, address to, uint256 value) internal {
+    require(to != address(0));
+
+    _balances[from] = _balances[from].sub(value);
+    _balances[to] = _balances[to].add(value);
+    emit Transfer(from, to, value);
   }
 
-  function _burn(address account, uint256 amount) internal {
-    require(account != 0);
-    require(amount <= _balances[account]);
+  function _mint(address account, uint256 value) internal {
+    require(account != address(0));
 
-    _totalSupply = _totalSupply.sub(amount);
-    _balances[account] = _balances[account].sub(amount);
-    emit Transfer(account, address(0), amount);
+    _totalSupply = _totalSupply.add(value);
+    _balances[account] = _balances[account].add(value);
+    emit Transfer(address(0), account, value);
   }
 
-  function _burnFrom(address account, uint256 amount) internal {
-    require(amount <= _allowed[account][msg.sender]);
+  function _burn(address account, uint256 value) internal {
+    require(account != address(0));
 
+    _totalSupply = _totalSupply.sub(value);
+    _balances[account] = _balances[account].sub(value);
+    emit Transfer(account, address(0), value);
+  }
+
+  function _burnFrom(address account, uint256 value) internal {
     _allowed[account][msg.sender] = _allowed[account][msg.sender].sub(
-      amount);
-    _burn(account, amount);
+      value);
+    _burn(account, value);
   }
 }
 
@@ -329,7 +330,7 @@ contract TonyTonyToken is ERC20, Ownable, Pausable {
   string public constant symbol = "TTT";
   uint8 public constant decimals = 18;
 
-  uint256 public constant INITIAL_SUPPLY = 10 * 10**8 * (10 ** uint256(decimals)); //1B
+  uint256 public constant INITIAL_SUPPLY = 1 * 10**9 * (10 ** uint256(decimals)); //1B
 
   constructor(address InitOwner) public {
     _mint(InitOwner, INITIAL_SUPPLY);
@@ -406,47 +407,5 @@ contract TonyTonyToken is ERC20, Ownable, Pausable {
   function freezeAccount(address account, bool freeze) onlyOwner public {
       frozenAccount[account] = freeze;
       emit FrozenFunds(account, freeze);
-  }
-}
-
-library SafeERC20 {
-  function safeTransfer(
-    IERC20 token,
-    address to,
-    uint256 value
-  )
-    internal
-  {
-    require(token.transfer(to, value));
-  }
-
-  function safeTransferFrom(
-    IERC20 token,
-    address from,
-    address to,
-    uint256 value
-  )
-    internal
-  {
-    require(token.transferFrom(from, to, value));
-  }
-
-  function safeApprove(
-    IERC20 token,
-    address spender,
-    uint256 value
-  )
-    internal
-  {
-    require(token.approve(spender, value));
-  }
-}
-
-contract CanReclaimToken is Ownable {
-  using SafeERC20 for IERC20;
-
-  function reclaimToken(IERC20 _token) external onlyOwner {
-    uint256 balance = _token.balanceOf(this);
-    _token.safeTransfer(owner(), balance);
   }
 }
